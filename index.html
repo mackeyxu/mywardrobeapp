@@ -63,6 +63,10 @@
       .transition-custom {
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
+      .image-preview {
+        object-fit: contain;
+        background: #f9f9f9;
+      }
     }
   </style>
 </head>
@@ -194,7 +198,6 @@
           <button class="category-btn px-4 py-2 rounded-full bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-sm font-medium transition-custom" data-category="配饰">
             <i class="fa fa-sun mr-1"></i>配饰
           </button>
-          <!-- 新增分类：连衣裙和半身裙 -->
           <button class="category-btn px-4 py-2 rounded-full bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-sm font-medium transition-custom" data-category="连衣裙">
             <i class="fa fa-user-tie mr-1"></i>连衣裙
           </button>
@@ -294,7 +297,6 @@
             <option value="裤子">裤子</option>
             <option value="鞋子">鞋子</option>
             <option value="配饰">配饰</option>
-            <!-- 新增分类选项 -->
             <option value="连衣裙">连衣裙</option>
             <option value="半身裙">半身裙</option>
           </select>
@@ -321,6 +323,30 @@
           <label for="brand" class="block text-sm font-medium text-neutral-700 mb-1">品牌（可选）</label>
           <input type="text" id="brand" name="brand" class="block w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom" placeholder="例如：优衣库">
         </div>
+
+        <!-- 新增：图片上传区域 -->
+        <div>
+          <label class="block text-sm font-medium text-neutral-700 mb-1">衣物图片（可选）</label>
+          <div class="border-2 border-dashed border-neutral-300 rounded-lg p-4 text-center hover:border-primary transition-custom">
+            <input type="file" id="image-upload" accept="image/*" class="hidden" />
+            <label for="image-upload" class="cursor-pointer">
+              <i class="fa fa-camera text-3xl text-neutral-400 mb-2"></i>
+              <p class="text-sm text-neutral-600">点击上传图片或拖放至此</p>
+              <p class="text-xs text-neutral-500 mt-1">支持JPG、PNG格式，建议大小不超过2MB</p>
+            </label>
+          </div>
+          
+          <!-- 图片预览区域 -->
+          <div id="image-preview-container" class="mt-3 hidden">
+            <p class="text-sm font-medium text-neutral-700 mb-1">预览：</p>
+            <div class="relative">
+              <img id="image-preview" src="" alt="衣物预览" class="w-full h-48 object-cover rounded-lg border border-neutral-200" />
+              <button id="remove-image" class="absolute top-2 right-2 w-8 h-8 bg-white/80 hover:bg-white rounded-full flex items-center justify-center text-red-500 shadow-md transition-custom">
+                <i class="fa fa-times"></i>
+              </button>
+            </div>
+          </div>
+        </div>
         
         <div class="pt-2">
           <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-medium py-2 px-4 rounded-lg transition-custom">
@@ -342,14 +368,39 @@
       </div>
       
       <div class="p-6">
-        <p class="text-neutral-600 mb-4">每行输入一件衣物信息，格式：名称,分类,季节,颜色,品牌（品牌可选）</p>
-        <p class="text-sm text-neutral-500 mb-6">示例：<br>
-          黑色T恤,上衣,夏季,黑色,优衣库<br>
-          牛仔裤,裤子,四季,蓝色,李维斯<br>
-          碎花裙,连衣裙,夏季,粉色,无印良品
-        </p>
+        <!-- 批量数据输入区域 -->
+        <div class="mb-6">
+          <p class="text-neutral-600 mb-4">每行输入一件衣物信息，格式：名称,分类,季节,颜色,品牌（品牌可选）</p>
+          <p class="text-sm text-neutral-500 mb-4">示例：<br>
+            黑色T恤,上衣,夏季,黑色,优衣库<br>
+            牛仔裤,裤子,四季,蓝色,李维斯<br>
+            碎花裙,连衣裙,夏季,粉色,无印良品
+          </p>
+          
+          <textarea id="batch-content" rows="6" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom font-mono text-sm" placeholder="按格式输入多个衣物信息，每行一个..."></textarea>
+        </div>
         
-        <textarea id="batch-content" rows="10" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom font-mono text-sm" placeholder="按格式输入多个衣物信息，每行一个..."></textarea>
+        <!-- 批量图片上传区域（新增） -->
+        <div class="mb-6 pt-4 border-t">
+          <h4 class="font-medium text-neutral-800 mb-3 flex items-center">
+            <i class="fa fa-images text-primary mr-2"></i>批量上传图片
+          </h4>
+          <p class="text-sm text-neutral-600 mb-3">上传与上方列表对应的衣物图片（可选，按顺序匹配）</p>
+          
+          <div class="border-2 border-dashed border-neutral-300 rounded-lg p-4 text-center hover:border-primary transition-custom">
+            <input type="file" id="batch-image-upload" accept="image/*" multiple class="hidden" />
+            <label for="batch-image-upload" class="cursor-pointer">
+              <i class="fa fa-upload text-3xl text-neutral-400 mb-2"></i>
+              <p class="text-sm text-neutral-600">选择多张图片或拖放至此</p>
+              <p class="text-xs text-neutral-500 mt-1">支持JPG、PNG格式，最多10张，每张不超过2MB</p>
+            </label>
+          </div>
+          
+          <!-- 选中图片预览 -->
+          <div id="batch-image-preview" class="mt-3 flex flex-wrap gap-2 hidden">
+            <!-- 图片预览将动态生成 -->
+          </div>
+        </div>
         
         <div class="mt-6 flex space-x-3">
           <button id="batch-confirm-btn" class="flex-1 bg-primary hover:bg-primary/90 text-white font-medium py-2 px-4 rounded-lg transition-custom">
@@ -419,6 +470,71 @@
   </div>
 
   <script>
+    // 图片处理工具类
+    const ImageUtils = {
+      // 压缩图片
+      compressImage(file, maxWidth = 600, maxHeight = 600, quality = 0.8) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+              // 计算压缩后的尺寸
+              let width = img.width;
+              let height = img.height;
+              
+              if (width > maxWidth) {
+                height = (height * maxWidth) / width;
+                width = maxWidth;
+              }
+              
+              if (height > maxHeight) {
+                width = (width * maxHeight) / height;
+                height = maxHeight;
+              }
+              
+              // 创建画布并绘制压缩后的图片
+              const canvas = document.createElement('canvas');
+              canvas.width = width;
+              canvas.height = height;
+              
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              // 转换为Base64
+              canvas.toDataURL('image/jpeg', quality, (dataUrl) => {
+                resolve(dataUrl);
+              });
+            };
+            img.onerror = reject;
+            img.src = event.target.result;
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      },
+      
+      // 批量处理图片
+      async processImages(files) {
+        const processedImages = [];
+        for (const file of files) {
+          // 验证文件类型和大小
+          if (!file.type.startsWith('image/')) {
+            throw new Error(`文件 ${file.name} 不是图片`);
+          }
+          
+          if (file.size > 2 * 1024 * 1024) { // 2MB
+            throw new Error(`图片 ${file.name} 过大，请选择2MB以下的图片`);
+          }
+          
+          // 压缩图片
+          const compressedData = await this.compressImage(file);
+          processedImages.push(compressedData);
+        }
+        return processedImages;
+      }
+    };
+
     // 登录状态管理
     const Auth = {
       // 检查用户是否已登录
@@ -474,11 +590,13 @@
     // 衣橱数据管理
     const Wardrobe = {
       items: [],
+      batchImages: [], // 存储批量上传的图片
       
       // 初始化
       init() {
         this.loadItems();
         this.setupEventListeners();
+        this.setupImageUploadListeners();
       },
       
       // 从本地存储加载衣物数据
@@ -507,6 +625,7 @@
           season: item.season,
           color: item.color,
           brand: item.brand || '',
+          image: item.image || '', // 新增：图片Base64数据
           wearCount: 0,
           lastWorn: null,
           addedDate: new Date().toISOString()
@@ -517,36 +636,56 @@
         return newItem;
       },
       
-      // 批量添加衣物
-      batchAddItems(itemsData) {
+      // 批量添加衣物（支持图片关联）
+      async batchAddItems(itemsData, images = []) {
         const successCount = [];
         const errorItems = [];
         
-        itemsData.forEach((item, index) => {
-          // 验证必填项
-          if (!item.name || !item.category || !item.season || !item.color) {
-            errorItems.push({ line: index + 1, reason: "缺少必填项（名称、分类、季节、颜色）" });
-            return;
+        // 验证图片数量是否匹配
+        if (images.length > 0 && images.length !== itemsData.length) {
+          errorItems.push({ 
+            line: '图片', 
+            reason: `图片数量(${images.length})与衣物数量(${itemsData.length})不匹配` 
+          });
+          return { success: 0, errors: errorItems };
+        }
+        
+        try {
+          for (let i = 0; i < itemsData.length; i++) {
+            const item = itemsData[i];
+            // 验证必填项
+            if (!item.name || !item.category || !item.season || !item.color) {
+              errorItems.push({ line: i + 1, reason: "缺少必填项（名称、分类、季节、颜色）" });
+              continue;
+            }
+            
+            // 验证分类是否有效
+            const validCategories = ['上衣', '裤子', '鞋子', '配饰', '连衣裙', '半身裙'];
+            if (!validCategories.includes(item.category)) {
+              errorItems.push({ line: i + 1, reason: "分类无效（必须是：上衣、裤子、鞋子、配饰、连衣裙、半身裙）" });
+              continue;
+            }
+            
+            // 验证季节是否有效
+            const validSeasons = ['春季', '夏季', '秋季', '冬季', '四季'];
+            if (!validSeasons.includes(item.season)) {
+              errorItems.push({ line: i + 1, reason: "季节无效（必须是：春季、夏季、秋季、冬季、四季）" });
+              continue;
+            }
+            
+            // 添加图片（如果有）
+            const itemWithImage = {
+              ...item,
+              image: images[i] || ''
+            };
+            
+            // 添加到衣橱
+            this.addItem(itemWithImage);
+            successCount.push(1);
           }
-          
-          // 验证分类是否有效（已包含新分类）
-          const validCategories = ['上衣', '裤子', '鞋子', '配饰', '连衣裙', '半身裙'];
-          if (!validCategories.includes(item.category)) {
-            errorItems.push({ line: index + 1, reason: "分类无效（必须是：上衣、裤子、鞋子、配饰、连衣裙、半身裙）" });
-            return;
-          }
-          
-          // 验证季节是否有效
-          const validSeasons = ['春季', '夏季', '秋季', '冬季', '四季'];
-          if (!validSeasons.includes(item.season)) {
-            errorItems.push({ line: index + 1, reason: "季节无效（必须是：春季、夏季、秋季、冬季、四季）" });
-            return;
-          }
-          
-          // 添加到衣橱
-          this.addItem(item);
-          successCount.push(1);
-        });
+        } catch (error) {
+          errorItems.push({ line: '系统', reason: error.message });
+        }
         
         return {
           success: successCount.length,
@@ -583,7 +722,7 @@
         this.saveItems();
       },
       
-      // 渲染衣物列表
+      // 渲染衣物列表（含图片展示）
       renderItems(filterCategory = 'all') {
         const container = document.getElementById('wardrobe-items');
         container.innerHTML = '';
@@ -605,7 +744,7 @@
           const card = document.createElement('div');
           card.className = 'bg-white rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-custom group';
           
-          // 根据分类选择不同的图标（已添加新分类图标）
+          // 根据分类选择不同的图标
           let categoryIcon = 'fa-tshirt';
           if (item.category === '裤子') categoryIcon = 'fa-socks';
           if (item.category === '鞋子') categoryIcon = 'fa-shoe-prints';
@@ -617,9 +756,14 @@
           const addedDate = new Date(item.addedDate);
           const formattedDate = `${addedDate.getFullYear()}-${(addedDate.getMonth() + 1).toString().padStart(2, '0')}-${addedDate.getDate().toString().padStart(2, '0')}`;
           
+          // 图片展示逻辑：有图片显示图片，无图片显示图标
+          const imageContent = item.image 
+            ? `<img src="${item.image}" alt="${item.name}" class="w-full h-full object-cover transition-custom group-hover:scale-105" />`
+            : `<i class="fa ${categoryIcon} text-6xl text-primary/70 group-hover:text-primary transition-custom"></i>`;
+          
           card.innerHTML = `
-            <div class="h-48 bg-neutral-100 flex items-center justify-center p-4">
-              <i class="fa ${categoryIcon} text-6xl text-primary/70 group-hover:text-primary transition-custom"></i>
+            <div class="h-48 overflow-hidden bg-neutral-100 flex items-center justify-center p-0">
+              ${imageContent}
             </div>
             <div class="p-4">
               <div class="flex justify-between items-start mb-2">
@@ -695,6 +839,132 @@
         });
       },
       
+      // 设置图片上传相关事件监听器
+      setupImageUploadListeners() {
+        // 单张图片上传预览
+        const imageUpload = document.getElementById('image-upload');
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const imagePreview = document.getElementById('image-preview');
+        const removeImage = document.getElementById('remove-image');
+        
+        // 监听图片选择
+        imageUpload.addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          
+          try {
+            // 压缩并预览图片
+            const compressedData = await ImageUtils.compressImage(file);
+            imagePreview.src = compressedData;
+            imagePreviewContainer.classList.remove('hidden');
+            
+            // 存储图片数据到表单（通过隐藏字段）
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.id = 'image-data';
+            hiddenInput.value = compressedData;
+            
+            // 移除旧的隐藏字段
+            const oldInput = document.getElementById('image-data');
+            if (oldInput) oldInput.remove();
+            
+            // 添加新的隐藏字段
+            document.getElementById('item-form').appendChild(hiddenInput);
+          } catch (error) {
+            Notification.show(`图片处理失败: ${error.message}`, 'error');
+          }
+        });
+        
+        // 移除图片
+        removeImage.addEventListener('click', () => {
+          imagePreview.src = '';
+          imagePreviewContainer.classList.add('hidden');
+          const imageDataInput = document.getElementById('image-data');
+          if (imageDataInput) imageDataInput.remove();
+          imageUpload.value = '';
+        });
+        
+        // 批量图片上传预览
+        const batchImageUpload = document.getElementById('batch-image-upload');
+        const batchImagePreview = document.getElementById('batch-image-preview');
+        
+        batchImageUpload.addEventListener('change', async (e) => {
+          const files = Array.from(e.target.files);
+          if (files.length === 0) return;
+          
+          // 限制最多10张图片
+          if (files.length > 10) {
+            Notification.show('最多只能上传10张图片', 'error');
+            e.target.value = '';
+            return;
+          }
+          
+          try {
+            // 处理并预览图片
+            this.batchImages = await ImageUtils.processImages(files);
+            batchImagePreview.innerHTML = '';
+            batchImagePreview.classList.remove('hidden');
+            
+            this.batchImages.forEach((imageData, index) => {
+              const previewItem = document.createElement('div');
+              previewItem.className = 'relative w-20 h-20 rounded-md overflow-hidden border border-neutral-200';
+              previewItem.innerHTML = `
+                <img src="${imageData}" alt="预览图 ${index + 1}" class="w-full h-full object-cover" />
+                <button class="batch-remove-image absolute top-0 right-0 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs" data-index="${index}">
+                  <i class="fa fa-times"></i>
+                </button>
+              `;
+              batchImagePreview.appendChild(previewItem);
+            });
+            
+            // 添加删除单个图片的事件
+            document.querySelectorAll('.batch-remove-image').forEach(btn => {
+              btn.addEventListener('click', (e) => {
+                const index = parseInt(e.currentTarget.dataset.index);
+                this.batchImages.splice(index, 1);
+                this.updateBatchImagePreview();
+              });
+            });
+          } catch (error) {
+            Notification.show(`图片处理失败: ${error.message}`, 'error');
+            e.target.value = '';
+          }
+        });
+      },
+      
+      // 更新批量图片预览
+      updateBatchImagePreview() {
+        const batchImagePreview = document.getElementById('batch-image-preview');
+        if (this.batchImages.length === 0) {
+          batchImagePreview.innerHTML = '';
+          batchImagePreview.classList.add('hidden');
+          document.getElementById('batch-image-upload').value = '';
+          return;
+        }
+        
+        batchImagePreview.innerHTML = '';
+        this.batchImages.forEach((imageData, index) => {
+          const previewItem = document.createElement('div');
+          previewItem.className = 'relative w-20 h-20 rounded-md overflow-hidden border border-neutral-200';
+          previewItem.innerHTML = `
+            <img src="${imageData}" alt="预览图 ${index + 1}" class="w-full h-full object-cover" />
+            <button class="batch-remove-image absolute top-0 right-0 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs" data-index="${index}">
+              <i class="fa fa-times"></i>
+            </button>
+          `;
+          batchImagePreview.appendChild(previewItem);
+        });
+        
+        // 重新绑定删除事件
+        document.querySelectorAll('.batch-remove-image').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const index = parseInt(e.currentTarget.dataset.index);
+            this.batchImages.splice(index, 1);
+            this.updateBatchImagePreview();
+          });
+        });
+      },
+      
       // 更新空状态显示
       updateEmptyState() {
         const emptyState = document.getElementById('empty-state');
@@ -714,6 +984,10 @@
         document.getElementById('modal-title').textContent = '添加新衣物';
         document.getElementById('item-form').reset();
         document.getElementById('item-id').value = '';
+        document.getElementById('image-preview-container').classList.add('hidden');
+        document.getElementById('image-preview').src = '';
+        const imageDataInput = document.getElementById('image-data');
+        if (imageDataInput) imageDataInput.remove();
         document.getElementById('item-modal').classList.remove('hidden');
       },
       
@@ -726,6 +1000,31 @@
         document.getElementById('season').value = item.season;
         document.getElementById('color').value = item.color;
         document.getElementById('brand').value = item.brand || '';
+        
+        // 处理图片预览
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const imagePreview = document.getElementById('image-preview');
+        
+        if (item.image) {
+          imagePreview.src = item.image;
+          imagePreviewContainer.classList.remove('hidden');
+          
+          // 添加隐藏字段存储图片数据
+          const hiddenInput = document.createElement('input');
+          hiddenInput.type = 'hidden';
+          hiddenInput.id = 'image-data';
+          hiddenInput.value = item.image;
+          
+          // 移除旧的隐藏字段
+          const oldInput = document.getElementById('image-data');
+          if (oldInput) oldInput.remove();
+          
+          document.getElementById('item-form').appendChild(hiddenInput);
+        } else {
+          imagePreview.src = '';
+          imagePreviewContainer.classList.add('hidden');
+        }
+        
         document.getElementById('item-modal').classList.remove('hidden');
       },
       
@@ -739,10 +1038,14 @@
         document.getElementById('batch-upload-btn').addEventListener('click', () => {
           document.getElementById('batch-modal').classList.remove('hidden');
           document.getElementById('batch-content').value = '';
+          this.batchImages = [];
+          this.updateBatchImagePreview();
         });
         document.getElementById('empty-batch-btn').addEventListener('click', () => {
           document.getElementById('batch-modal').classList.remove('hidden');
           document.getElementById('batch-content').value = '';
+          this.batchImages = [];
+          this.updateBatchImagePreview();
         });
         
         // 关闭批量上传模态框
@@ -753,10 +1056,12 @@
         // 清空批量输入框
         document.getElementById('batch-clear-btn').addEventListener('click', () => {
           document.getElementById('batch-content').value = '';
+          this.batchImages = [];
+          this.updateBatchImagePreview();
         });
         
         // 确认批量添加
-        document.getElementById('batch-confirm-btn').addEventListener('click', () => {
+        document.getElementById('batch-confirm-btn').addEventListener('click', async () => {
           const content = document.getElementById('batch-content').value.trim();
           if (!content) {
             Notification.show('请输入衣物信息', 'error');
@@ -776,15 +1081,17 @@
             };
           });
           
-          // 批量添加
-          const result = this.batchAddItems(itemsData);
+          // 批量添加（含图片）
+          const result = await this.batchAddItems(itemsData, this.batchImages);
           
           // 显示结果
           if (result.errors.length === 0) {
             Notification.show(`成功添加 ${result.success} 件衣物`, 'success');
             document.getElementById('batch-modal').classList.add('hidden');
+            this.batchImages = [];
+            this.updateBatchImagePreview();
           } else {
-            let errorMsg = `成功添加 ${result.success} 件，以下行有错误：\n`;
+            let errorMsg = `成功添加 ${result.success} 件，以下有错误：\n`;
             result.errors.forEach(err => {
               errorMsg += `第 ${err.line} 行：${err.reason}\n`;
             });
@@ -832,12 +1139,15 @@
           e.preventDefault();
           
           const id = document.getElementById('item-id').value;
+          const imageDataInput = document.getElementById('image-data');
+          
           const itemData = {
             name: document.getElementById('name').value,
             category: document.getElementById('category').value,
             season: document.getElementById('season').value,
             color: document.getElementById('color').value,
-            brand: document.getElementById('brand').value
+            brand: document.getElementById('brand').value,
+            image: imageDataInput ? imageDataInput.value : '' // 新增：图片数据
           };
           
           if (id) {
@@ -889,17 +1199,17 @@
         this.updateFrequencyList(items);
       },
       
-      // 更新分类图表（已包含新分类）
+      // 更新分类图表
       updateCategoryChart(items) {
         const ctx = document.getElementById('category-chart').getContext('2d');
         
-        // 统计各分类数量（包含新分类）
+        // 统计各分类数量
         const categories = ['上衣', '裤子', '鞋子', '配饰', '连衣裙', '半身裙'];
         const counts = categories.map(cat => {
           return items.filter(item => item.category === cat).length;
         });
         
-        // 颜色配置（增加两个新颜色）
+        // 颜色配置
         const colors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
         
         // 如果图表已存在，销毁它
