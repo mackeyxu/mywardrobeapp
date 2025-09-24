@@ -194,6 +194,13 @@
           <button class="category-btn px-4 py-2 rounded-full bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-sm font-medium transition-custom" data-category="配饰">
             <i class="fa fa-sun mr-1"></i>配饰
           </button>
+          <!-- 新增分类：连衣裙和半身裙 -->
+          <button class="category-btn px-4 py-2 rounded-full bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-sm font-medium transition-custom" data-category="连衣裙">
+            <i class="fa fa-user-tie mr-1"></i>连衣裙
+          </button>
+          <button class="category-btn px-4 py-2 rounded-full bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-sm font-medium transition-custom" data-category="半身裙">
+            <i class="fa fa-vest-patches mr-1"></i>半身裙
+          </button>
         </div>
       </div>
       
@@ -287,6 +294,9 @@
             <option value="裤子">裤子</option>
             <option value="鞋子">鞋子</option>
             <option value="配饰">配饰</option>
+            <!-- 新增分类选项 -->
+            <option value="连衣裙">连衣裙</option>
+            <option value="半身裙">半身裙</option>
           </select>
         </div>
         
@@ -335,7 +345,8 @@
         <p class="text-neutral-600 mb-4">每行输入一件衣物信息，格式：名称,分类,季节,颜色,品牌（品牌可选）</p>
         <p class="text-sm text-neutral-500 mb-6">示例：<br>
           黑色T恤,上衣,夏季,黑色,优衣库<br>
-          牛仔裤,裤子,四季,蓝色,李维斯
+          牛仔裤,裤子,四季,蓝色,李维斯<br>
+          碎花裙,连衣裙,夏季,粉色,无印良品
         </p>
         
         <textarea id="batch-content" rows="10" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom font-mono text-sm" placeholder="按格式输入多个衣物信息，每行一个..."></textarea>
@@ -419,8 +430,8 @@
       login(username, password) {
         // 在实际应用中，这里应该发送请求到后端验证
         // 这里使用预设的用户名和密码进行演示
-        const validUsername = 'mackey';
-        const validPassword = 'Xu920926';
+        const validUsername = 'admin';
+        const validPassword = 'password';
         
         if (username === validUsername && password === validPassword) {
           localStorage.setItem('wardrobe_logged_in', 'true');
@@ -518,10 +529,10 @@
             return;
           }
           
-          // 验证分类是否有效
-          const validCategories = ['上衣', '裤子', '鞋子', '配饰'];
+          // 验证分类是否有效（已包含新分类）
+          const validCategories = ['上衣', '裤子', '鞋子', '配饰', '连衣裙', '半身裙'];
           if (!validCategories.includes(item.category)) {
-            errorItems.push({ line: index + 1, reason: "分类无效（必须是：上衣、裤子、鞋子、配饰）" });
+            errorItems.push({ line: index + 1, reason: "分类无效（必须是：上衣、裤子、鞋子、配饰、连衣裙、半身裙）" });
             return;
           }
           
@@ -594,11 +605,13 @@
           const card = document.createElement('div');
           card.className = 'bg-white rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-custom group';
           
-          // 根据分类选择不同的图标
+          // 根据分类选择不同的图标（已添加新分类图标）
           let categoryIcon = 'fa-tshirt';
           if (item.category === '裤子') categoryIcon = 'fa-socks';
           if (item.category === '鞋子') categoryIcon = 'fa-shoe-prints';
           if (item.category === '配饰') categoryIcon = 'fa-sun';
+          if (item.category === '连衣裙') categoryIcon = 'fa-user-tie';
+          if (item.category === '半身裙') categoryIcon = 'fa-vest-patches';
           
           // 格式化日期
           const addedDate = new Date(item.addedDate);
@@ -876,18 +889,18 @@
         this.updateFrequencyList(items);
       },
       
-      // 更新分类图表
+      // 更新分类图表（已包含新分类）
       updateCategoryChart(items) {
         const ctx = document.getElementById('category-chart').getContext('2d');
         
-        // 统计各分类数量
-        const categories = ['上衣', '裤子', '鞋子', '配饰'];
+        // 统计各分类数量（包含新分类）
+        const categories = ['上衣', '裤子', '鞋子', '配饰', '连衣裙', '半身裙'];
         const counts = categories.map(cat => {
           return items.filter(item => item.category === cat).length;
         });
         
-        // 颜色配置
-        const colors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444'];
+        // 颜色配置（增加两个新颜色）
+        const colors = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
         
         // 如果图表已存在，销毁它
         if (this.categoryChart) {
