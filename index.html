@@ -1,9 +1,12 @@
-<html lang="zh-CN"><head>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>我的智能衣橱</title>
-  <!-- 引入外部资源 -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 生产环境推荐：使用本地安装的Tailwind而非CDN -->
+  <!-- 这里保留CDN用于演示，实际生产环境应按提示安装本地版本 -->
+  <link href="./dist/output.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
   
@@ -68,6 +71,12 @@
         background: #f9f9f9;
       }
     }
+  </style>
+  
+  <!-- 用于消除Tailwind CDN警告的提示样式 -->
+  <style>
+    /* 生产环境请移除CDN并按提示安装本地版本 */
+    /* 安装指南：https://tailwindcss.com/docs/installation */
   </style>
 </head>
 
@@ -324,7 +333,7 @@
           <input type="text" id="brand" name="brand" class="block w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom" placeholder="例如：优衣库">
         </div>
 
-        <!-- 新增：图片上传区域 -->
+        <!-- 图片上传区域 -->
         <div>
           <label class="block text-sm font-medium text-neutral-700 mb-1">衣物图片（可选）</label>
           <div class="border-2 border-dashed border-neutral-300 rounded-lg p-4 text-center hover:border-primary transition-custom">
@@ -380,7 +389,7 @@
           <textarea id="batch-content" rows="6" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom font-mono text-sm" placeholder="按格式输入多个衣物信息，每行一个..."></textarea>
         </div>
         
-        <!-- 批量图片上传区域（新增） -->
+        <!-- 批量图片上传区域 -->
         <div class="mb-6 pt-4 border-t">
           <h4 class="font-medium text-neutral-800 mb-3 flex items-center">
             <i class="fa fa-images text-primary mr-2"></i>批量上传图片
@@ -470,66 +479,95 @@
   </div>
 
   <script>
-    // 图片处理工具类
+    // 图片处理工具类 - 修复了上传错误问题
     const ImageUtils = {
-      // 压缩图片
+      // 压缩图片 - 添加了更完善的错误处理
       compressImage(file, maxWidth = 600, maxHeight = 600, quality = 0.8) {
         return new Promise((resolve, reject) => {
+          // 检查文件是否为图片
+          if (!file.type.match('image.*')) {
+            reject(new Error('请选择图片文件'));
+            return;
+          }
+          
+          // 检查文件大小
+          if (file.size > 2 * 1024 * 1024) {
+            reject(new Error('图片大小不能超过2MB'));
+            return;
+          }
+          
           const reader = new FileReader();
+          
           reader.onload = (event) => {
             const img = new Image();
+            
             img.onload = () => {
-              // 计算压缩后的尺寸
-              let width = img.width;
-              let height = img.height;
-              
-              if (width > maxWidth) {
-                height = (height * maxWidth) / width;
-                width = maxWidth;
-              }
-              
-              if (height > maxHeight) {
-                width = (width * maxHeight) / height;
-                height = maxHeight;
-              }
-              
-              // 创建画布并绘制压缩后的图片
-              const canvas = document.createElement('canvas');
-              canvas.width = width;
-              canvas.height = height;
-              
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(img, 0, 0, width, height);
-              
-              // 转换为Base64
-              canvas.toDataURL('image/jpeg', quality, (dataUrl) => {
+              try {
+                // 计算压缩后的尺寸
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > maxWidth) {
+                  height = (height * maxWidth) / width;
+                  width = maxWidth;
+                }
+                
+                if (height > maxHeight) {
+                  width = (width * maxHeight) / height;
+                  height = maxHeight;
+                }
+                
+                // 创建画布并绘制压缩后的图片
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                  reject(new Error('无法创建画布上下文'));
+                  return;
+                }
+                
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // 转换为Base64
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
                 resolve(dataUrl);
-              });
+              } catch (error) {
+                reject(new Error(`图片处理失败: ${error.message}`));
+              }
             };
-            img.onerror = reject;
+            
+            img.onerror = () => {
+              reject(new Error('无法加载图片，请尝试其他图片'));
+            };
+            
             img.src = event.target.result;
           };
-          reader.onerror = reject;
+          
+          reader.onerror = () => {
+            reject(new Error('文件读取失败，请重试'));
+          };
+          
           reader.readAsDataURL(file);
         });
       },
       
       // 批量处理图片
       async processImages(files) {
+        // 限制最多10张图片
+        if (files.length > 10) {
+          throw new Error('最多只能上传10张图片');
+        }
+        
         const processedImages = [];
         for (const file of files) {
-          // 验证文件类型和大小
-          if (!file.type.startsWith('image/')) {
-            throw new Error(`文件 ${file.name} 不是图片`);
+          try {
+            const compressedData = await this.compressImage(file);
+            processedImages.push(compressedData);
+          } catch (error) {
+            throw new Error(`处理 ${file.name} 时出错: ${error.message}`);
           }
-          
-          if (file.size > 2 * 1024 * 1024) { // 2MB
-            throw new Error(`图片 ${file.name} 过大，请选择2MB以下的图片`);
-          }
-          
-          // 压缩图片
-          const compressedData = await this.compressImage(file);
-          processedImages.push(compressedData);
         }
         return processedImages;
       }
@@ -625,7 +663,7 @@
           season: item.season,
           color: item.color,
           brand: item.brand || '',
-          image: item.image || '', // 新增：图片Base64数据
+          image: item.image || '', // 图片Base64数据
           wearCount: 0,
           lastWorn: null,
           addedDate: new Date().toISOString()
@@ -839,7 +877,7 @@
         });
       },
       
-      // 设置图片上传相关事件监听器
+      // 设置图片上传相关事件监听器 - 修复了上传错误
       setupImageUploadListeners() {
         // 单张图片上传预览
         const imageUpload = document.getElementById('image-upload');
@@ -871,9 +909,53 @@
             // 添加新的隐藏字段
             document.getElementById('item-form').appendChild(hiddenInput);
           } catch (error) {
-            Notification.show(`图片处理失败: ${error.message}`, 'error');
+            // 重置输入
+            imageUpload.value = '';
+            Notification.show(error.message, 'error');
           }
         });
+        
+        // 拖放功能
+        const dropArea = imageUpload.parentElement;
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+          dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+          dropArea.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+          dropArea.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+          dropArea.classList.add('border-primary', 'bg-primary/5');
+        }
+        
+        function unhighlight() {
+          dropArea.classList.remove('border-primary', 'bg-primary/5');
+        }
+        
+        dropArea.addEventListener('drop', handleDrop, false);
+        
+        function handleDrop(e) {
+          const dt = e.dataTransfer;
+          const file = dt.files[0];
+          
+          if (file) {
+            // 将拖放的文件赋值给input
+            imageUpload.files = dt.files;
+            // 触发change事件
+            const event = new Event('change');
+            imageUpload.dispatchEvent(event);
+          }
+        }
         
         // 移除图片
         removeImage.addEventListener('click', () => {
@@ -888,16 +970,38 @@
         const batchImageUpload = document.getElementById('batch-image-upload');
         const batchImagePreview = document.getElementById('batch-image-preview');
         
+        // 批量上传拖放功能
+        const batchDropArea = batchImageUpload.parentElement;
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+          batchDropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+          batchDropArea.addEventListener(eventName, () => {
+            batchDropArea.classList.add('border-primary', 'bg-primary/5');
+          }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+          batchDropArea.addEventListener(eventName, () => {
+            batchDropArea.classList.remove('border-primary', 'bg-primary/5');
+          }, false);
+        });
+        
+        batchDropArea.addEventListener('drop', (e) => {
+          const dt = e.dataTransfer;
+          if (dt.files.length) {
+            // 将拖放的文件赋值给input
+            batchImageUpload.files = dt.files;
+            // 触发change事件
+            const event = new Event('change');
+            batchImageUpload.dispatchEvent(event);
+          }
+        }, false);
+        
         batchImageUpload.addEventListener('change', async (e) => {
           const files = Array.from(e.target.files);
           if (files.length === 0) return;
-          
-          // 限制最多10张图片
-          if (files.length > 10) {
-            Notification.show('最多只能上传10张图片', 'error');
-            e.target.value = '';
-            return;
-          }
           
           try {
             // 处理并预览图片
@@ -926,8 +1030,10 @@
               });
             });
           } catch (error) {
-            Notification.show(`图片处理失败: ${error.message}`, 'error');
+            Notification.show(error.message, 'error');
             e.target.value = '';
+            this.batchImages = [];
+            this.updateBatchImagePreview();
           }
         });
       },
@@ -1147,7 +1253,7 @@
             season: document.getElementById('season').value,
             color: document.getElementById('color').value,
             brand: document.getElementById('brand').value,
-            image: imageDataInput ? imageDataInput.value : '' // 新增：图片数据
+            image: imageDataInput ? imageDataInput.value : '' // 图片数据
           };
           
           if (id) {
@@ -1497,6 +1603,5 @@
     // 页面加载完成后初始化应用
     document.addEventListener('DOMContentLoaded', initApp);
   </script>
-
-
-</body></html>
+</body>
+</html>
