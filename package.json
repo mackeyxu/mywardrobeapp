@@ -4,13 +4,14 @@
   "description": "我的智能衣橱应用",
   "main": "index.html",
   "scripts": {
-    "build:css": "tailwindcss -i ./input.css -o ./dist/output.css --minify",
+    "build:css": "tailwindcss -i ./input.css -o ./dist/output.css --minify && copyfiles index.html dist",
     "watch:css": "tailwindcss -i ./input.css -o ./dist/output.css --watch",
     "start": "npm run watch:css"
   },
   "devDependencies": {
     "tailwindcss": "^3.3.2",
     "autoprefixer": "^10.4.14",
-    "postcss": "^8.4.24"
+    "postcss": "^8.4.24",
+    "copyfiles": "^2.4.1"
   }
 }
