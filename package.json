@@ -1,9 +1,16 @@
 {
-  "devDependencies": {
-    "tailwindcss": "^3.3.2"
-  },  
+  "name": "my-wardrobe",
+  "version": "1.0.0",
+  "description": "我的智能衣橱应用",
+  "main": "index.html",
   "scripts": {
-    "build": "tailwindcss -i ./src/input.css -o ./dist/output.css --minify",
-    "dev": "tailwindcss -i ./src/input.css -o ./dist/output.css --watch"
+    "build:css": "tailwindcss -i ./input.css -o ./dist/output.css --minify",
+    "watch:css": "tailwindcss -i ./input.css -o ./dist/output.css --watch",
+    "start": "npm run watch:css"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.2",
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.24"
   }
 }
