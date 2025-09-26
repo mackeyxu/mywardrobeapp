@@ -4,7 +4,7 @@
   "description": "我的智能衣橱应用",
   "main": "index.html",
   "scripts": {
-    "build:css": "tailwindcss -i ./input.css -o ./dist/output.css --minify && copyfiles index.html dist",
+    "build:css": "chmod +x node_modules/.bin/* && tailwindcss -i ./input.css -o ./dist/output.css --minify && copyfiles index.html dist",
     "watch:css": "tailwindcss -i ./input.css -o ./dist/output.css --watch",
     "start": "npm run watch:css"
   },
