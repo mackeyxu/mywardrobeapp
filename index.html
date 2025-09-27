@@ -68,6 +68,10 @@
             .modal-backdrop {
                 backdrop-filter: blur(4px);
             }
+            .storage-hint {
+                background-color: #fff8e1;
+                border-left: 4px solid #f59e0b;
+            }
         }
     </style>
 </head>
@@ -120,6 +124,14 @@
                     <i class="fa fa-tshirt text-primary text-4xl mb-3"></i>
                     <h2 class="text-2xl font-bold text-neutral-800">智能衣橱管理系统</h2>
                     <p class="text-neutral-500">请登录以继续</p>
+                </div>
+                
+                <!-- iOS存储提示 -->
+                <div class="storage-hint p-3 rounded-lg mb-5 hidden" id="iosStorageHint">
+                    <p class="text-sm text-neutral-700 flex items-start">
+                        <i class="fa fa-info-circle text-secondary mt-0.5 mr-2"></i>
+                        <span>iOS设备请确保已关闭"防止跨站跟踪"，并允许网站存储数据以正常使用。</span>
+                    </p>
                 </div>
                 
                 <form id="loginForm" class="space-y-4">
@@ -573,7 +585,10 @@
     <script>
         // 等待整个文档加载完成
         document.addEventListener('DOMContentLoaded', function() {
-            // 数据库工具类 - 使用IndexedDB替代localStorage
+            // 检测设备是否为iOS
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            
+            // 数据库工具类 - 增强iOS兼容性
             const DBUtils = {
                 dbName: 'wardrobeDB',
                 version: 1,
@@ -582,32 +597,49 @@
                     user: 'id'
                 },
                 
-                // 打开数据库连接
+                // 打开数据库连接，增强错误处理
                 open() {
                     return new Promise((resolve, reject) => {
-                        const request = indexedDB.open(this.dbName, this.version);
-                        
-                        // 数据库升级时触发
-                        request.onupgradeneeded = (event) => {
-                            const db = event.target.result;
+                        // iOS Safari在隐私模式下会阻止IndexedDB
+                        try {
+                            const request = indexedDB.open(this.dbName, this.version);
                             
-                            // 创建存储对象
-                            Object.keys(this.stores).forEach(storeName => {
-                                if (!db.objectStoreNames.contains(storeName)) {
-                                    db.createObjectStore(storeName, { keyPath: this.stores[storeName] });
+                            // 数据库升级时触发
+                            request.onupgradeneeded = (event) => {
+                                const db = event.target.result;
+                                
+                                // 创建存储对象
+                                Object.keys(this.stores).forEach(storeName => {
+                                    if (!db.objectStoreNames.contains(storeName)) {
+                                        db.createObjectStore(storeName, { keyPath: this.stores[storeName] });
+                                    }
+                                });
+                            };
+                            
+                            request.onsuccess = (event) => {
+                                this.db = event.target.result;
+                                resolve(this.db);
+                            };
+                            
+                            request.onerror = (event) => {
+                                console.error('打开数据库失败:', event.target.error);
+                                // 对于iOS设备，明确提示可能的隐私限制
+                                if (isIOS) {
+                                    reject(new Error('iOS设备存储访问受限，请检查浏览器隐私设置'));
+                                } else {
+                                    reject(event.target.error);
                                 }
-                            });
-                        };
-                        
-                        request.onsuccess = (event) => {
-                            this.db = event.target.result;
-                            resolve(this.db);
-                        };
-                        
-                        request.onerror = (event) => {
-                            console.error('打开数据库失败:', event.target.error);
-                            reject(event.target.error);
-                        };
+                            };
+                            
+                            // 处理数据库被阻止的情况（常见于iOS隐私模式）
+                            request.onblocked = () => {
+                                console.error('数据库被阻止');
+                                reject(new Error('存储操作被阻止，请关闭其他浏览器标签页后重试'));
+                            };
+                        } catch (error) {
+                            console.error('IndexedDB初始化失败:', error);
+                            reject(error);
+                        }
                     });
                 },
                 
@@ -620,55 +652,80 @@
                 // 保存数据
                 save(storeName, data) {
                     return new Promise((resolve, reject) => {
-                        const store = this.getStore(storeName, 'readwrite');
-                        const request = store.put(data);
-                        
-                        request.onsuccess = () => resolve(request.result);
-                        request.onerror = () => reject(request.error);
+                        try {
+                            const store = this.getStore(storeName, 'readwrite');
+                            const request = store.put(data);
+                            
+                            request.onsuccess = () => resolve(request.result);
+                            request.onerror = () => reject(request.error);
+                        } catch (error) {
+                            console.error('保存数据失败:', error);
+                            reject(error);
+                        }
                     });
                 },
                 
                 // 获取所有数据
                 getAll(storeName) {
                     return new Promise((resolve, reject) => {
-                        const store = this.getStore(storeName);
-                        const request = store.getAll();
-                        
-                        request.onsuccess = () => resolve(request.result);
-                        request.onerror = () => reject(request.error);
+                        try {
+                            const store = this.getStore(storeName);
+                            const request = store.getAll();
+                            
+                            request.onsuccess = () => resolve(request.result);
+                            request.onerror = () => reject(request.error);
+                        } catch (error) {
+                            console.error('获取所有数据失败:', error);
+                            reject(error);
+                        }
                     });
                 },
                 
                 // 根据ID获取数据
                 getById(storeName, id) {
                     return new Promise((resolve, reject) => {
-                        const store = this.getStore(storeName);
-                        const request = store.get(id);
-                        
-                        request.onsuccess = () => resolve(request.result);
-                        request.onerror = () => reject(request.error);
+                        try {
+                            const store = this.getStore(storeName);
+                            const request = store.get(id);
+                            
+                            request.onsuccess = () => resolve(request.result);
+                            request.onerror = () => reject(request.error);
+                        } catch (error) {
+                            console.error('根据ID获取数据失败:', error);
+                            reject(error);
+                        }
                     });
                 },
                 
                 // 根据ID删除数据
                 deleteById(storeName, id) {
                     return new Promise((resolve, reject) => {
-                        const store = this.getStore(storeName, 'readwrite');
-                        const request = store.delete(id);
-                        
-                        request.onsuccess = () => resolve(true);
-                        request.onerror = () => reject(request.error);
+                        try {
+                            const store = this.getStore(storeName, 'readwrite');
+                            const request = store.delete(id);
+                            
+                            request.onsuccess = () => resolve(true);
+                            request.onerror = () => reject(request.error);
+                        } catch (error) {
+                            console.error('删除数据失败:', error);
+                            reject(error);
+                        }
                     });
                 },
                 
                 // 清空存储
                 clear(storeName) {
                     return new Promise((resolve, reject) => {
-                        const store = this.getStore(storeName, 'readwrite');
-                        const request = store.clear();
-                        
-                        request.onsuccess = () => resolve(true);
-                        request.onerror = () => reject(request.error);
+                        try {
+                            const store = this.getStore(storeName, 'readwrite');
+                            const request = store.clear();
+                            
+                            request.onsuccess = () => resolve(true);
+                            request.onerror = () => reject(request.error);
+                        } catch (error) {
+                            console.error('清空存储失败:', error);
+                            reject(error);
+                        }
                     });
                 }
             };
@@ -742,15 +799,23 @@
                 }
             };
 
-            // 应用状态管理 - 使用IndexedDB
+            // 应用状态管理 - 增强iOS兼容性
             const AppState = {
                 clothes: [],
                 currentUser: null,
                 dbReady: false,
+                // 用于会话存储的临时用户状态（当永久存储失败时）
+                sessionUser: null,
                 
                 // 初始化数据
                 async init() {
                     try {
+                        // 先尝试从会话存储恢复用户状态（如果之前永久存储失败）
+                        const sessionUser = sessionStorage.getItem('wardrobe_session_user');
+                        if (sessionUser) {
+                            this.sessionUser = JSON.parse(sessionUser);
+                        }
+                        
                         await DBUtils.open();
                         this.dbReady = true;
                         await this.loadFromDB();
@@ -758,6 +823,11 @@
                         console.error('初始化数据库失败:', error);
                         // 降级使用localStorage
                         this.loadFromLocalStorage();
+                        
+                        // 如果是iOS设备，记录存储错误
+                        if (isIOS) {
+                            console.error('iOS存储初始化失败:', error);
+                        }
                     }
                 },
                 
@@ -769,6 +839,11 @@
                         this.clothes = await DBUtils.getAll('clothes') || [];
                         const users = await DBUtils.getAll('user');
                         this.currentUser = users[0] || null;
+                        
+                        // 如果有会话用户但没有数据库用户，使用会话用户
+                        if (!this.currentUser && this.sessionUser) {
+                            this.currentUser = this.sessionUser;
+                        }
                     } catch (error) {
                         console.error('从数据库加载数据失败:', error);
                     }
@@ -786,6 +861,11 @@
                         
                         if (savedUser) {
                             this.currentUser = JSON.parse(savedUser);
+                        }
+                        
+                        // 再次检查会话存储
+                        if (!this.currentUser && this.sessionUser) {
+                            this.currentUser = this.sessionUser;
                         }
                     } catch (error) {
                         console.error('从localStorage加载数据失败:', error);
@@ -809,7 +889,9 @@
                         return true;
                     } catch (error) {
                         console.error('保存衣物到数据库失败:', error);
-                        return false;
+                        // 尝试保存到localStorage作为后备
+                        const localStorageSuccess = this.saveToLocalStorage();
+                        return localStorageSuccess;
                     }
                 },
                 
@@ -820,17 +902,32 @@
                         return true;
                     } catch (error) {
                         console.error('保存到localStorage失败:', error);
+                        // iOS隐私模式下localStorage可能也会失败，不返回成功
                         return false;
                     }
                 },
                 
-                // 保存用户状态
+                // 保存用户状态 - 增强iOS兼容性
                 async saveUser(user) {
                     this.currentUser = user;
+                    this.sessionUser = user; // 同时保存到会话状态
+                    
+                    // 保存到会话存储，确保当前会话可用
+                    try {
+                        sessionStorage.setItem('wardrobe_session_user', JSON.stringify(user));
+                    } catch (e) {
+                        console.error('保存到sessionStorage失败:', e);
+                    }
                     
                     if (!this.dbReady) {
-                        localStorage.setItem('wardrobe_user', JSON.stringify(user));
-                        return true;
+                        try {
+                            localStorage.setItem('wardrobe_user', JSON.stringify(user));
+                            return true;
+                        } catch (error) {
+                            console.error('保存用户到localStorage失败:', error);
+                            // 即使localStorage失败，会话存储可能可用，返回部分成功
+                            return !!this.sessionUser;
+                        }
                     }
                     
                     try {
@@ -839,14 +936,25 @@
                         return true;
                     } catch (error) {
                         console.error('保存用户到数据库失败:', error);
-                        localStorage.setItem('wardrobe_user', JSON.stringify(user));
-                        return false;
+                        // 尝试保存到localStorage作为后备
+                        try {
+                            localStorage.setItem('wardrobe_user', JSON.stringify(user));
+                            return true;
+                        } catch (localErr) {
+                            console.error('保存用户到localStorage失败:', localErr);
+                            // 最终依赖会话存储
+                            return !!this.sessionUser;
+                        }
                     }
                 },
                 
                 // 登出
                 async logout() {
                     this.currentUser = null;
+                    this.sessionUser = null;
+                    
+                    // 清除会话存储
+                    sessionStorage.removeItem('wardrobe_session_user');
                     
                     if (!this.dbReady) {
                         localStorage.removeItem('wardrobe_user');
@@ -855,11 +963,12 @@
                     
                     try {
                         await DBUtils.clear('user');
+                        localStorage.removeItem('wardrobe_user');
                         return true;
                     } catch (error) {
                         console.error('登出时清空用户失败:', error);
                         localStorage.removeItem('wardrobe_user');
-                        return false;
+                        return true;
                     }
                 },
                 
@@ -1047,12 +1156,18 @@
                 }
             };
 
-            // 应用UI控制器
+            // 应用UI控制器 - 增强iOS兼容性
             const UIController = {
                 // 初始化UI
                 async init() {
                     this.cacheDOM();
                     this.bindEvents();
+                    
+                    // 对于iOS设备，显示存储提示
+                    if (isIOS && this.iosStorageHint) {
+                        this.iosStorageHint.classList.remove('hidden');
+                    }
+                    
                     await AppState.init(); // 等待数据库初始化完成
                     this.checkLoginStatus();
                     this.showNavbar();
@@ -1064,6 +1179,9 @@
                     this.loginPage = document.getElementById('loginPage');
                     this.appPage = document.getElementById('appPage');
                     this.footer = document.getElementById('footer');
+                    
+                    // iOS存储提示
+                    this.iosStorageHint = document.getElementById('iosStorageHint');
                     
                     // 登录相关
                     this.loginForm = document.getElementById('loginForm');
@@ -1285,7 +1403,8 @@
                 
                 // 检查登录状态
                 checkLoginStatus() {
-                    if (AppState.currentUser) {
+                    // 即使永久存储失败，会话存储中的用户也可以登录
+                    if (AppState.currentUser || AppState.sessionUser) {
                         this.showApp();
                     } else {
                         this.showLogin();
@@ -1324,7 +1443,7 @@
                     }
                 },
                 
-                // 处理登录
+                // 处理登录 - 增强iOS兼容性提示
                 handleLogin(e) {
                     e.preventDefault();
                     
@@ -1336,10 +1455,25 @@
                         AppState.saveUser({ username })
                             .then(success => {
                                 if (success) {
-                                    this.showNotification('登录成功', '欢迎回来，' + username);
+                                    // 检查是否是iOS设备且使用了会话存储
+                                    if (isIOS && AppState.sessionUser && !localStorage.getItem('wardrobe_user')) {
+                                        this.showNotification(
+                                            '登录成功', 
+                                            '已使用临时会话登录，关闭浏览器后需要重新登录'
+                                        );
+                                    } else {
+                                        this.showNotification('登录成功', '欢迎回来，' + username);
+                                    }
                                     this.checkLoginStatus();
                                 } else {
-                                    this.showNotification('登录警告', '登录成功但保存用户信息失败', 'warning');
+                                    this.showNotification(
+                                        '登录警告', 
+                                        '登录成功但无法保存用户信息。请检查浏览器设置：关闭"防止跨站跟踪"并允许网站存储数据。', 
+                                        'warning'
+                                    );
+                                    // 即使保存失败，也允许用户在当前会话使用
+                                    AppState.sessionUser = { username };
+                                    sessionStorage.setItem('wardrobe_session_user', JSON.stringify({ username }));
                                     this.checkLoginStatus();
                                 }
                             });
@@ -1573,7 +1707,11 @@
                         this.closeClothesModalFunc();
                         this.renderClothesList();
                     } else {
-                        this.showNotification('操作失败', '无法保存衣物信息', 'error');
+                        // 针对iOS设备提供更具体的错误信息
+                        const message = isIOS 
+                            ? '无法保存衣物信息。请检查浏览器设置，确保允许网站存储数据。'
+                            : '无法保存衣物信息';
+                        this.showNotification('操作失败', message, 'error');
                     }
                 },
                 
@@ -1692,9 +1830,16 @@
                         // 批量添加衣物
                         const successCount = await AppState.batchAddClothes(clothesItems);
                         
-                        this.closeBatchModalFunc();
-                        this.renderClothesList();
-                        this.showNotification('批量添加完成', `成功添加 ${successCount} 件衣物`);
+                        if (successCount > 0) {
+                            this.closeBatchModalFunc();
+                            this.renderClothesList();
+                            this.showNotification('批量添加完成', `成功添加 ${successCount} 件衣物`);
+                        } else {
+                            const message = isIOS 
+                                ? '批量添加失败，可能是存储权限问题。请检查浏览器设置。'
+                                : '批量添加失败';
+                            this.showNotification('操作失败', message, 'error');
+                        }
                     } catch (error) {
                         console.error('批量添加失败:', error);
                         this.showNotification('批量添加失败', error.message || '处理过程中发生错误', 'error');
@@ -1734,7 +1879,10 @@
                         this.closeWearModalFunc();
                         this.renderClothesList();
                     } else {
-                        this.showNotification('记录失败', '无法更新穿着次数', 'error');
+                        const message = isIOS 
+                            ? '无法更新穿着次数。请检查浏览器设置，确保允许网站存储数据。'
+                            : '无法更新穿着次数';
+                        this.showNotification('记录失败', message, 'error');
                     }
                 },
                 
@@ -1766,7 +1914,10 @@
                         this.closeDeleteModalFunc();
                         this.renderClothesList();
                     } else {
-                        this.showNotification('删除失败', '无法删除该衣物', 'error');
+                        const message = isIOS 
+                            ? '无法删除衣物。请检查浏览器设置，确保允许网站存储数据。'
+                            : '无法删除该衣物';
+                        this.showNotification('删除失败', message, 'error');
                     }
                 },
                 
@@ -2063,10 +2214,11 @@
                     this.notification.classList.add('translate-y-0', 'opacity-100');
                     this.notification.style.pointerEvents = 'auto';
                     
-                    // 3秒后自动隐藏
+                    // 5秒后自动隐藏（错误信息保留更长时间）
+                    const timeout = type === 'error' ? 8000 : 5000;
                     setTimeout(() => {
                         this.hideNotification();
-                    }, 3000);
+                    }, timeout);
                 },
                 
                 // 隐藏通知
