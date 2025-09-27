@@ -573,10 +573,110 @@
     <script>
         // 等待整个文档加载完成
         document.addEventListener('DOMContentLoaded', function() {
-            // 图片处理工具
+            // 数据库工具类 - 使用IndexedDB替代localStorage
+            const DBUtils = {
+                dbName: 'wardrobeDB',
+                version: 1,
+                stores: {
+                    clothes: 'id',
+                    user: 'id'
+                },
+                
+                // 打开数据库连接
+                open() {
+                    return new Promise((resolve, reject) => {
+                        const request = indexedDB.open(this.dbName, this.version);
+                        
+                        // 数据库升级时触发
+                        request.onupgradeneeded = (event) => {
+                            const db = event.target.result;
+                            
+                            // 创建存储对象
+                            Object.keys(this.stores).forEach(storeName => {
+                                if (!db.objectStoreNames.contains(storeName)) {
+                                    db.createObjectStore(storeName, { keyPath: this.stores[storeName] });
+                                }
+                            });
+                        };
+                        
+                        request.onsuccess = (event) => {
+                            this.db = event.target.result;
+                            resolve(this.db);
+                        };
+                        
+                        request.onerror = (event) => {
+                            console.error('打开数据库失败:', event.target.error);
+                            reject(event.target.error);
+                        };
+                    });
+                },
+                
+                // 获取对象存储
+                getStore(storeName, mode = 'readonly') {
+                    const transaction = this.db.transaction(storeName, mode);
+                    return transaction.objectStore(storeName);
+                },
+                
+                // 保存数据
+                save(storeName, data) {
+                    return new Promise((resolve, reject) => {
+                        const store = this.getStore(storeName, 'readwrite');
+                        const request = store.put(data);
+                        
+                        request.onsuccess = () => resolve(request.result);
+                        request.onerror = () => reject(request.error);
+                    });
+                },
+                
+                // 获取所有数据
+                getAll(storeName) {
+                    return new Promise((resolve, reject) => {
+                        const store = this.getStore(storeName);
+                        const request = store.getAll();
+                        
+                        request.onsuccess = () => resolve(request.result);
+                        request.onerror = () => reject(request.error);
+                    });
+                },
+                
+                // 根据ID获取数据
+                getById(storeName, id) {
+                    return new Promise((resolve, reject) => {
+                        const store = this.getStore(storeName);
+                        const request = store.get(id);
+                        
+                        request.onsuccess = () => resolve(request.result);
+                        request.onerror = () => reject(request.error);
+                    });
+                },
+                
+                // 根据ID删除数据
+                deleteById(storeName, id) {
+                    return new Promise((resolve, reject) => {
+                        const store = this.getStore(storeName, 'readwrite');
+                        const request = store.delete(id);
+                        
+                        request.onsuccess = () => resolve(true);
+                        request.onerror = () => reject(request.error);
+                    });
+                },
+                
+                // 清空存储
+                clear(storeName) {
+                    return new Promise((resolve, reject) => {
+                        const store = this.getStore(storeName, 'readwrite');
+                        const request = store.clear();
+                        
+                        request.onsuccess = () => resolve(true);
+                        request.onerror = () => reject(request.error);
+                    });
+                }
+            };
+
+            // 图片处理工具 - 增强压缩策略
             const ImageUtils = {
-                // 压缩图片
-                compressImage: async (file, maxWidth = 800, maxHeight = 800, quality = 0.8) => {
+                // 压缩图片 - 降低质量以减少存储大小
+                compressImage: async (file, maxWidth = 600, maxHeight = 600, quality = 0.6) => {
                     return new Promise((resolve, reject) => {
                         const img = new Image();
                         img.src = URL.createObjectURL(file);
@@ -615,72 +715,156 @@
                     });
                 },
                 
-                // 将图片文件转为Base64
-                fileToBase64: async (file) => {
+                // 将图片文件转为Base64 - 批量上传时使用更低质量
+                fileToBase64: async (file, isBatch = false) => {
                     return new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                            resolve(reader.result);
-                        };
-                        reader.onerror = reject;
+                        // 批量上传时使用更低的质量设置
+                        const quality = isBatch ? 0.5 : 0.7;
+                        const maxDim = isBatch ? 500 : 600;
                         
                         // 如果文件过大，先压缩再转换
-                        if (file.size > 5 * 1024 * 1024) { // 5MB
-                            this.compressImage(file)
+                        if (file.size > 2 * 1024 * 1024) { // 2MB
+                            this.compressImage(file, maxDim, maxDim, quality)
                                 .then(blob => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => resolve(reader.result);
+                                    reader.onerror = reject;
                                     reader.readAsDataURL(blob);
                                 })
                                 .catch(reject);
                         } else {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.onerror = reject;
                             reader.readAsDataURL(file);
                         }
                     });
                 }
             };
 
-            // 应用状态管理
+            // 应用状态管理 - 使用IndexedDB
             const AppState = {
                 clothes: [],
                 currentUser: null,
+                dbReady: false,
                 
                 // 初始化数据
-                init() {
-                    this.loadFromLocalStorage();
+                async init() {
+                    try {
+                        await DBUtils.open();
+                        this.dbReady = true;
+                        await this.loadFromDB();
+                    } catch (error) {
+                        console.error('初始化数据库失败:', error);
+                        // 降级使用localStorage
+                        this.loadFromLocalStorage();
+                    }
                 },
                 
-                // 从本地存储加载数据
+                // 从数据库加载数据
+                async loadFromDB() {
+                    if (!this.dbReady) return;
+                    
+                    try {
+                        this.clothes = await DBUtils.getAll('clothes') || [];
+                        const users = await DBUtils.getAll('user');
+                        this.currentUser = users[0] || null;
+                    } catch (error) {
+                        console.error('从数据库加载数据失败:', error);
+                    }
+                },
+                
+                // 从localStorage加载数据（降级方案）
                 loadFromLocalStorage() {
-                    const savedClothes = localStorage.getItem('wardrobe_clothes');
-                    const savedUser = localStorage.getItem('wardrobe_user');
-                    
-                    if (savedClothes) {
-                        this.clothes = JSON.parse(savedClothes);
-                    }
-                    
-                    if (savedUser) {
-                        this.currentUser = JSON.parse(savedUser);
+                    try {
+                        const savedClothes = localStorage.getItem('wardrobe_clothes');
+                        const savedUser = localStorage.getItem('wardrobe_user');
+                        
+                        if (savedClothes) {
+                            this.clothes = JSON.parse(savedClothes);
+                        }
+                        
+                        if (savedUser) {
+                            this.currentUser = JSON.parse(savedUser);
+                        }
+                    } catch (error) {
+                        console.error('从localStorage加载数据失败:', error);
+                        this.clothes = [];
+                        this.currentUser = null;
                     }
                 },
                 
-                // 保存数据到本地存储
+                // 保存衣物到数据库
+                async saveClothesToDB() {
+                    if (!this.dbReady) {
+                        return this.saveToLocalStorage();
+                    }
+                    
+                    try {
+                        // 先清空再批量保存（简单实现）
+                        await DBUtils.clear('clothes');
+                        for (const item of this.clothes) {
+                            await DBUtils.save('clothes', item);
+                        }
+                        return true;
+                    } catch (error) {
+                        console.error('保存衣物到数据库失败:', error);
+                        return false;
+                    }
+                },
+                
+                // 保存到localStorage（降级方案）
                 saveToLocalStorage() {
-                    localStorage.setItem('wardrobe_clothes', JSON.stringify(this.clothes));
+                    try {
+                        localStorage.setItem('wardrobe_clothes', JSON.stringify(this.clothes));
+                        return true;
+                    } catch (error) {
+                        console.error('保存到localStorage失败:', error);
+                        return false;
+                    }
                 },
                 
                 // 保存用户状态
-                saveUser(user) {
+                async saveUser(user) {
                     this.currentUser = user;
-                    localStorage.setItem('wardrobe_user', JSON.stringify(user));
+                    
+                    if (!this.dbReady) {
+                        localStorage.setItem('wardrobe_user', JSON.stringify(user));
+                        return true;
+                    }
+                    
+                    try {
+                        await DBUtils.clear('user');
+                        await DBUtils.save('user', user);
+                        return true;
+                    } catch (error) {
+                        console.error('保存用户到数据库失败:', error);
+                        localStorage.setItem('wardrobe_user', JSON.stringify(user));
+                        return false;
+                    }
                 },
                 
                 // 登出
-                logout() {
+                async logout() {
                     this.currentUser = null;
-                    localStorage.removeItem('wardrobe_user');
+                    
+                    if (!this.dbReady) {
+                        localStorage.removeItem('wardrobe_user');
+                        return true;
+                    }
+                    
+                    try {
+                        await DBUtils.clear('user');
+                        return true;
+                    } catch (error) {
+                        console.error('登出时清空用户失败:', error);
+                        localStorage.removeItem('wardrobe_user');
+                        return false;
+                    }
                 },
                 
                 // 添加衣物
-                addClothes(item) {
+                async addClothes(item) {
                     // 生成唯一ID
                     item.id = Date.now().toString();
                     // 添加默认属性
@@ -689,38 +873,69 @@
                     item.addedDate = new Date().toISOString().split('T')[0];
                     
                     this.clothes.push(item);
-                    this.saveToLocalStorage();
-                    return item;
+                    const success = await this.saveClothesToDB();
+                    return success ? item : null;
+                },
+                
+                // 批量添加衣物
+                async batchAddClothes(items) {
+                    if (!items || items.length === 0) return 0;
+                    
+                    // 为每个物品添加ID和默认属性
+                    const newItems = items.map(item => ({
+                        id: Date.now().toString() + Math.floor(Math.random() * 1000),
+                        ...item,
+                        wearCount: 0,
+                        wearHistory: [],
+                        addedDate: new Date().toISOString().split('T')[0]
+                    }));
+                    
+                    this.clothes.push(...newItems);
+                    const success = await this.saveClothesToDB();
+                    return success ? newItems.length : 0;
                 },
                 
                 // 更新衣物
-                updateClothes(updatedItem) {
+                async updateClothes(updatedItem) {
                     const index = this.clothes.findIndex(item => item.id === updatedItem.id);
                     if (index !== -1) {
                         this.clothes[index] = { ...this.clothes[index], ...updatedItem };
-                        this.saveToLocalStorage();
-                        return this.clothes[index];
+                        const success = await this.saveClothesToDB();
+                        return success ? this.clothes[index] : null;
                     }
                     return null;
                 },
                 
                 // 删除衣物
-                deleteClothes(id) {
+                async deleteClothes(id) {
                     const initialLength = this.clothes.length;
                     this.clothes = this.clothes.filter(item => item.id !== id);
-                    this.saveToLocalStorage();
-                    return initialLength > this.clothes.length;
+                    
+                    if (!this.dbReady) {
+                        this.saveToLocalStorage();
+                        return initialLength > this.clothes.length;
+                    }
+                    
+                    try {
+                        await DBUtils.deleteById('clothes', id);
+                        return initialLength > this.clothes.length;
+                    } catch (error) {
+                        console.error('从数据库删除衣物失败:', error);
+                        const success = this.saveToLocalStorage();
+                        return success && initialLength > this.clothes.length;
+                    }
                 },
                 
                 // 记录穿着
-                recordWear(id) {
+                async recordWear(id) {
                     const item = this.clothes.find(item => item.id === id);
                     if (item) {
                         item.wearCount = (item.wearCount || 0) + 1;
                         item.wearHistory = item.wearHistory || [];
                         item.wearHistory.push(new Date().toISOString().split('T')[0]);
-                        this.saveToLocalStorage();
-                        return true;
+                        
+                        const success = await this.saveClothesToDB();
+                        return success;
                     }
                     return false;
                 },
@@ -835,9 +1050,10 @@
             // 应用UI控制器
             const UIController = {
                 // 初始化UI
-                init() {
+                async init() {
                     this.cacheDOM();
                     this.bindEvents();
+                    await AppState.init(); // 等待数据库初始化完成
                     this.checkLoginStatus();
                     this.showNavbar();
                 },
@@ -929,7 +1145,7 @@
                     
                     // 删除确认模态框
                     this.deleteModal = document.getElementById('deleteModal');
-                    this.closeDeleteModal = document.getElementById('closeDeleteBtn'); // 注意: 原HTML中此ID可能拼写有误
+                    this.closeDeleteBtn = document.getElementById('closeDeleteBtn');
                     this.cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
                     this.confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
                     this.deleteClothesIdInput = document.getElementById('deleteClothesId');
@@ -1044,9 +1260,8 @@
                     }
                     
                     // 删除确认
-                    // 注意: 原HTML中关闭删除模态框的按钮ID可能是"closeDeleteBtn"而不是"closeWearModal"
-                    if (document.getElementById('closeDeleteBtn')) {
-                        document.getElementById('closeDeleteBtn').addEventListener('click', () => this.closeDeleteModalFunc());
+                    if (this.closeDeleteBtn) {
+                        this.closeDeleteBtn.addEventListener('click', () => this.closeDeleteModalFunc());
                     }
                     
                     if (this.cancelDeleteBtn) {
@@ -1116,11 +1331,18 @@
                     const username = this.usernameInput.value.trim();
                     const password = this.passwordInput.value.trim();
                     
-                    // 简单验证 - 实际应用中应该有更安全的验证
-                    if ((username === 'mackey' && password === 'xu920926')) {
-                        AppState.saveUser({ username });
-                        this.showNotification('登录成功', '欢迎回来，' + username);
-                        this.checkLoginStatus();
+                    // 简单验证
+                    if ((username === 'admin' && password === 'password')) {
+                        AppState.saveUser({ username })
+                            .then(success => {
+                                if (success) {
+                                    this.showNotification('登录成功', '欢迎回来，' + username);
+                                    this.checkLoginStatus();
+                                } else {
+                                    this.showNotification('登录警告', '登录成功但保存用户信息失败', 'warning');
+                                    this.checkLoginStatus();
+                                }
+                            });
                     } else {
                         this.showNotification('登录失败', '用户名或密码错误', 'error');
                     }
@@ -1128,9 +1350,11 @@
                 
                 // 处理登出
                 handleLogout() {
-                    AppState.logout();
-                    this.showNotification('已登出', '您已成功退出登录');
-                    this.checkLoginStatus();
+                    AppState.logout()
+                        .then(success => {
+                            this.showNotification('已登出', '您已成功退出登录');
+                            this.checkLoginStatus();
+                        });
                 },
                 
                 // 切换密码显示
@@ -1328,18 +1552,18 @@
                 },
                 
                 // 保存衣物数据
-                saveClothesData(id, data) {
+                async saveClothesData(id, data) {
                     let result;
                     
                     if (id) {
                         // 更新现有衣物
-                        result = AppState.updateClothes({ ...data, id });
+                        result = await AppState.updateClothes({ ...data, id });
                         if (result) {
                             this.showNotification('更新成功', '衣物信息已更新');
                         }
                     } else {
                         // 添加新衣物
-                        result = AppState.addClothes(data);
+                        result = await AppState.addClothes(data);
                         if (result) {
                             this.showNotification('添加成功', '新衣物已添加到衣橱');
                         }
@@ -1383,27 +1607,36 @@
                     
                     const files = e.target.files;
                     if (files.length > 0) {
-                        Array.from(files).forEach((file, index) => {
-                            // 预览图片
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                                const preview = document.createElement('div');
-                                preview.className = 'relative w-20 h-20 bg-gray-100 rounded-md overflow-hidden';
-                                preview.innerHTML = `
-                                    <img src="${event.target.result}" alt="预览图 ${index + 1}" class="w-full h-full object-cover">
-                                    <span class="absolute top-1 right-1 bg-black/60 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                                        ${index + 1}
-                                    </span>
-                                `;
-                                this.batchImagesPreview.appendChild(preview);
-                            };
-                            reader.readAsDataURL(file);
-                        });
+                        // 限制批量上传的图片数量
+                        if (files.length > 10) {
+                            this.showNotification('超出限制', '一次最多上传10张图片', 'warning');
+                            // 截断文件列表
+                            Array.from(files).slice(0, 10).forEach(this.previewBatchImage.bind(this));
+                        } else {
+                            Array.from(files).forEach(this.previewBatchImage.bind(this));
+                        }
                     }
                 },
                 
+                // 预览批量上传的图片
+                previewBatchImage(file, index) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const preview = document.createElement('div');
+                        preview.className = 'relative w-20 h-20 bg-gray-100 rounded-md overflow-hidden';
+                        preview.innerHTML = `
+                            <img src="${event.target.result}" alt="预览图 ${index + 1}" class="w-full h-full object-cover">
+                            <span class="absolute top-1 right-1 bg-black/60 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
+                                ${index + 1}
+                            </span>
+                        `;
+                        this.batchImagesPreview.appendChild(preview);
+                    };
+                    reader.readAsDataURL(file);
+                },
+                
                 // 处理批量提交
-                handleBatchSubmit() {
+                async handleBatchSubmit() {
                     const text = this.batchText.value.trim();
                     if (!text) {
                         this.showNotification('输入为空', '请输入衣物信息', 'error');
@@ -1416,51 +1649,56 @@
                         return;
                     }
                     
+                    // 限制批量添加数量
+                    if (lines.length > 10) {
+                        this.showNotification('超出限制', '一次最多添加10件衣物', 'warning');
+                        return;
+                    }
+                    
                     // 处理图片
                     const imageFiles = this.batchImages.files;
                     const imagePromises = Array.from(imageFiles).map(file => 
-                        ImageUtils.fileToBase64(file)
+                        ImageUtils.fileToBase64(file, true) // 批量上传标记，使用更低质量
                     );
                     
-                    // 处理所有图片后再添加衣物
-                    Promise.all(imagePromises)
-                        .then(images => {
-                            let successCount = 0;
+                    try {
+                        // 处理所有图片
+                        const images = await Promise.all(imagePromises);
+                        const clothesItems = [];
+                        
+                        lines.forEach((line, index) => {
+                            const parts = line.split(',').map(part => part.trim());
                             
-                            lines.forEach((line, index) => {
-                                const parts = line.split(',').map(part => part.trim());
-                                
-                                // 验证格式
-                                if (parts.length < 4) {
-                                    console.error('格式错误:', line);
-                                    return;
-                                }
-                                
-                                // 创建衣物数据
-                                const clothesData = {
-                                    name: parts[0],
-                                    category: parts[1],
-                                    season: parts[2],
-                                    color: parts[3],
-                                    brand: parts[4] || '',
-                                    purchaseDate: parts[5] || '',
-                                    price: parts[6] || '',
-                                    // 如果有对应图片则使用，否则使用默认图片
-                                    image: images[index] || `https://picsum.photos/300/300?random=${Date.now() + index}`
-                                };
-                                
-                                // 添加衣物
-                                AppState.addClothes(clothesData);
-                                successCount++;
+                            // 验证格式
+                            if (parts.length < 4) {
+                                console.error('格式错误:', line);
+                                return;
+                            }
+                            
+                            // 创建衣物数据
+                            clothesItems.push({
+                                name: parts[0],
+                                category: parts[1],
+                                season: parts[2],
+                                color: parts[3],
+                                brand: parts[4] || '',
+                                purchaseDate: parts[5] || '',
+                                price: parts[6] || '',
+                                // 如果有对应图片则使用，否则使用默认图片
+                                image: images[index] || `https://picsum.photos/300/300?random=${Date.now() + index}`
                             });
-                            
-                            this.closeBatchModalFunc();
-                            this.renderClothesList();
-                            this.showNotification('批量添加完成', `成功添加 ${successCount} 件衣物`);
-                        })
-                        .catch(error => {
-                            this.showNotification('图片处理失败', error.message, 'error');
                         });
+                        
+                        // 批量添加衣物
+                        const successCount = await AppState.batchAddClothes(clothesItems);
+                        
+                        this.closeBatchModalFunc();
+                        this.renderClothesList();
+                        this.showNotification('批量添加完成', `成功添加 ${successCount} 件衣物`);
+                    } catch (error) {
+                        console.error('批量添加失败:', error);
+                        this.showNotification('批量添加失败', error.message || '处理过程中发生错误', 'error');
+                    }
                 },
                 
                 // 打开穿着记录模态框
@@ -1487,9 +1725,11 @@
                 },
                 
                 // 确认穿着记录
-                handleConfirmWear() {
+                async handleConfirmWear() {
                     const id = this.wearClothesIdInput.value;
-                    if (id && AppState.recordWear(id)) {
+                    const success = await AppState.recordWear(id);
+                    
+                    if (success) {
                         this.showNotification('记录成功', '已更新穿着次数');
                         this.closeWearModalFunc();
                         this.renderClothesList();
@@ -1517,9 +1757,11 @@
                 },
                 
                 // 确认删除
-                handleConfirmDelete() {
+                async handleConfirmDelete() {
                     const id = this.deleteClothesIdInput.value;
-                    if (id && AppState.deleteClothes(id)) {
+                    const success = await AppState.deleteClothes(id);
+                    
+                    if (success) {
                         this.showNotification('删除成功', '衣物已从衣橱中移除');
                         this.closeDeleteModalFunc();
                         this.renderClothesList();
@@ -1808,6 +2050,9 @@
                     if (type === 'error') {
                         this.notificationIcon.className = 'text-red-500 mt-0.5';
                         this.notificationIcon.innerHTML = '<i class="fa fa-exclamation-circle text-xl"></i>';
+                    } else if (type === 'warning') {
+                        this.notificationIcon.className = 'text-yellow-500 mt-0.5';
+                        this.notificationIcon.innerHTML = '<i class="fa fa-exclamation-triangle text-xl"></i>';
                     } else {
                         this.notificationIcon.className = 'text-green-500 mt-0.5';
                         this.notificationIcon.innerHTML = '<i class="fa fa-check-circle text-xl"></i>';
@@ -1835,9 +2080,8 @@
             };
 
             // 初始化应用
-            function init() {
-                AppState.init();
-                UIController.init();
+            async function init() {
+                await UIController.init();
             }
 
             // 启动应用
