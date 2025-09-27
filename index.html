@@ -628,7 +628,7 @@
             },
             
             // 批量处理图片
-            processImages: async (files) => {
+            processImages: async function(files) {
                 const promises = Array.from(files).map(file => 
                     this.fileToBase64(file)
                 );
